@@ -1,0 +1,108 @@
+#management.endpoint.gateway.enabled=true # default value
+#management.endpoints.web.exposure.include=gateway
+
+server:
+  port: ${PORT:8085}
+
+logging.pattern.console: "%clr(%d{HH:mm:ss.SSS}){blue} %clr(---){faint} %clr([%15.15t]){yellow} %clr(:){red} %clr(%m){faint}%n"
+logging.path: "D:/temp_nila/logs"
+management.endpoint.health.show-details: always
+management.endpoints.web.exposure.include: health,info,circuitbreakers,circuitbreakerevents,retries,retryevents
+management.health.circuitbreakers.enabled: true
+
+#logging.level.io.github.resilience4j: DEBUG
+#logging.level.org.springframework.cloud.gateway.filter.factory: TRACE
+
+spring:
+  application:
+    name: GATEWAY-SERVICE
+  reactor:
+    context-propagation: AUTO
+  #redis:
+    #host: localhost
+    #port: 6379
+  #output.ansi.enabled: ALWAYS
+  cloud:
+    gateway:
+      routes:
+      - id: ACCOUNT-SERVICE
+        uri: lb://ACCOUNT-SERVICE
+        #uri: http://localhost:8091
+        predicates:
+        - Path=/account/**
+        filters:
+        - RewritePath=/account/(?<segment>.*), /account/${segment}
+        - name: CustomRateLimiter
+          args:
+            routeId: ACCOUNT-SERVICE
+        - name: CircuitBreaker
+          args:
+            name: accountCircuitBreaker
+            fallbackUri: forward:/account/fallback
+
+      - id: AUTH_SERVICE_GLOBAL
+        #uri: lb://AUTH_SERVICE_GLOBAL
+        uri: http://localhost:7777
+        predicates:
+        - Path=/authservice/**
+        filters:
+        - RewritePath=/authservice/(?<segment>.*), /authservice/${segment}
+        #- name: CustomRateLimiter
+          #args:
+            #routeId: AUTH_SERVICE_GLOBAL
+        - name: CircuitBreaker
+          args:
+            name: authCircuitBreaker
+            fallbackUri: forward:/auth/fallback
+            
+      - id: graphql-service
+        uri: http://localhost:8092
+        predicates:
+        - Path=/graphql/**
+        
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:4500" # Replace with your frontend origin(s)
+              #- "https://your-frontend-domain.com"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders:
+              - "*" # Or specify specific headers like Authorization, Content-Type
+            allowCredentials: true
+            maxAge: 3600
+
+resilience4j.circuitbreaker:
+  instances:
+    accountCircuitBreaker:
+      registerHealthIndicator: true
+      slidingWindowSize: 10
+      failureRateThreshold: 50
+      waitDurationInOpenState: 10s
+      permittedNumberOfCallsInHalfOpenState: 3
+      minimumNumberOfCalls: 3 #Circuit Breaker will switch to Open state after 3 failed calls.
+    
+    authCircuitBreaker:
+      registerHealthIndicator: true
+      slidingWindowSize: 10
+      failureRateThreshold: 50
+      waitDurationInOpenState: 10s
+      permittedNumberOfCallsInHalfOpenState: 3
+      minimumNumberOfCalls: 3 #Circuit Breaker will switch to Open state after 3 failed calls.
+
+eureka:
+  instance:
+    preferIpAddress: true
+    #hostname: eureka-0
+  client:
+    registerWithEureka: true
+    fetchRegistry: true
+    serviceUrl:
+      #defaultZone: http://eureka-0.eureka.default.svc.cluster.local:8761/eureka
+      defaultZone: http://localhost:8761/eureka/ # Replace with your Eureka server URL
+

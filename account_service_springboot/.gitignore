@@ -1,0 +1,21 @@
+# Compiled class file
+*.class
+
+# Log file
+*.log
+
+# Package Files
+*.jar
+*.zip
+*.tar.gz
+*.rar
+
+# Generated Sources
+target
+.classpath
+.project
+.settings
+.mvn
+
+# IDE Files
+.idea
